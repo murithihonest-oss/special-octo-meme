@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Love Snake</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 15%, #7a1642 0%, #3d0a26 45%, #12030c 100%);
+    color: #ffe4ee; font-family: Georgia, "Segoe UI", serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    overflow: hidden; touch-action: none;
+  }
+  #bg { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+  #hud, #wrap, #pad { position: relative; z-index: 1; }
+  #hud { width: min(92vw, 420px); display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+  #hud button { background: #ff4d88; color: #fff; border: 0; border-radius: 999px; padding: 6px 14px; font-size: 14px; cursor: pointer; }
+  #wrap { position: relative; width: min(92vw, 420px); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; border-radius: 16px; background: #2a0a1c; box-shadow: 0 0 40px rgba(255, 60, 120, .55), 0 0 90px rgba(255, 150, 90, .25); border: 1px solid rgba(255, 190, 210, .35); display: block; }
+  #overlay {
+    position: absolute; inset: 0; border-radius: 16px; background: rgba(26, 6, 18, .85);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 20px;
+  }
+  #overlay.hidden { display: none; }
+  #title { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-size: 46px; margin: 0; color: #ff8fb5; text-shadow: 0 0 18px rgba(255, 90, 140, .8); }
+  #sub { margin: 0; font-size: 15px; opacity: .92; font-style: italic; line-height: 1.4; }
+  #name { padding: 10px 14px; border-radius: 10px; border: 2px solid #ff4d88; background: #1a0612; color: #fff; font-size: 16px; text-align: center; width: 80%; }
+  #start { background: #ff4d88; color: #fff; border: 0; border-radius: 999px; padding: 12px 32px; font-size: 18px; cursor: pointer; }
+  #banner {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: 90%;
+    background: linear-gradient(135deg, rgba(255, 120, 160, .95), rgba(255, 200, 120, .95)); color: #4a0a24; padding: 12px 16px; border-radius: 16px;
+    text-align: center; font-size: 15px; font-weight: bold; font-style: italic; box-shadow: 0 0 25px rgba(255, 120, 160, .7); opacity: 0; transition: opacity .4s; pointer-events: none;
+  }
+  #banner.show { opacity: 1; }
+  #proposal { position: absolute; inset: 0; border-radius: 16px; background: radial-gradient(circle, rgba(120, 20, 60, .96), rgba(20, 3, 12, .97));
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 22px; z-index: 5; }
+  #proposal.hidden { display: none; }
+  #propTitle { font-family: 'Brush Script MT', 'Segoe Script', cursive; font-size: 40px; margin: 0; color: #ffd0e0; text-shadow: 0 0 20px rgba(255, 90, 140, .9); line-height: 1.15; }
+  #propText { margin: 0; font-style: italic; font-size: 15px; line-height: 1.5; }
+  #proposal button { background: linear-gradient(135deg, #ff4d88, #ff9a6b); color: #fff; border: 0; border-radius: 999px; padding: 12px 26px; font-size: 17px; cursor: pointer; width: 85%; }
+  #pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); gap: 6px; }
+  #pad button { background: rgba(255, 77, 136, .25); border: 2px solid #ff4d88; border-radius: 14px; color: #fff; font-size: 22px; }
+  #pad [data-dir="up"] { grid-column: 2; grid-row: 1; }
+  #pad [data-dir="left"] { grid-column: 1; grid-row: 2; }
+  #pad [data-dir="down"] { grid-column: 2; grid-row: 2; }
+  #pad [data-dir="right"] { grid-column: 3; grid-row: 2; }
+  @media (min-width: 900px) and (pointer: fine) { #pad { display: none; } }
+</style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+  <div id="hud">
+    <span>Score: <b id="score">0</b></span>
+    <span>Hearts: <b id="hearts">0</b></span>
+    <button id="mute">Sound on</button>
+  </div>
+  <div id="wrap">
+    <canvas id="c" width="400" height="400"></canvas>
+    <div id="banner"></div>
+    <div id="proposal" class="hidden">
+      <h2 id="propTitle">Will you marry me?</h2>
+      <p id="propText">From the first day I met you, you have owned my heart. I want every tomorrow with you, my love.</p>
+      <button id="yes1">Yes, I will</button>
+      <button id="yes2">Yes, a thousand times</button>
+    </div>
+    <div id="overlay">
+      <h1 id="title">Love Snake</h1>
+      <p id="sub">Slow down, let the music wrap around you, and collect every heart I saved for you. Every 5 hearts unlocks a little secret.</p>
+      <input id="name" type="text" maxlength="20" placeholder="Her name, my love (optional)" autocomplete="off">
+      <button id="start">Start</button>
+    </div>
+  </div>
+  <div id="pad">
+    <button data-dir="up">&uarr;</button>
+    <button data-dir="left">&larr;</button>
+    <button data-dir="down">&darr;</button>
+    <button data-dir="right">&rarr;</button>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const canvas = $("c"), ctx = canvas.getContext("2d");
+const N = 20, CELL = canvas.width / N;
+
+let proposed = false, proposalOpen = false;
+let snake, dir, nextDir, foods, score, hearts, running = false, paused = false;
+let stepMs, lastStep = 0, bonusUntil = 0, particles = [], muted = false, bannerTimer;
+
+const MESSAGES = [
+  "NAME, every time I look at you, I forget how to breathe.",
+  "NAME, you are the sweetest temptation I never want to resist.",
+  "NAME, come closer. My heart beats only for you.",
+  "NAME, you have me wrapped around your finger, and I love it.",
+  "NAME, tonight and always, I only want you.",
+  "NAME, your smile undoes me every single time.",
+  "NAME, hold me close and never let go.",
+  "NAME, you are my favorite addiction."
+];
+
+/* ---------- Sound (generated, no audio files needed) ---------- */
+let audio, musicTimer, noteIdx = 0;
+function ac() {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (audio && audio.state === "suspended") audio.resume();
+  return audio;
+}
+function tone(freq, dur, type, vol, when, attack) {
+  if (muted) return;
+  const a = ac(); if (!a) return;
+  const t = a.currentTime + (when || 0), at = attack || 0.01;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type || "sine"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol || 0.15, t + at);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+// Slow, warm, late-night chord loop: Am9 - Dm9 - G13 - Cmaj7
+const CHORDS = [
+  { pad: [164.81, 196, 246.94, 261.63], bass: 55, mel: [[659.25, 0.2], [587.33, 1.2], [523.25, 2.0]] },
+  { pad: [220, 261.63, 329.63, 349.23], bass: 73.42, mel: [[698.46, 0.2], [659.25, 1.2], [523.25, 2.0]] },
+  { pad: [174.61, 246.94, 293.66, 329.63], bass: 49, mel: [[587.33, 0.2], [493.88, 1.4], [587.33, 2.2]] },
+  { pad: [196, 246.94, 329.63, 392], bass: 65.41, mel: [[659.25, 0.2], [783.99, 1.4], [659.25, 2.4]] }
+];
+function playBar() {
+  if (paused || !running) return;
+  const c = CHORDS[noteIdx++ % CHORDS.length];
+  c.pad.forEach(f => tone(f, 3.6, "sine", 0.03, 0, 0.6));
+  tone(c.bass, 1.6, "triangle", 0.09, 0, 0.05);
+  tone(c.bass, 1.4, "triangle", 0.06, 1.6, 0.05);
+  c.mel.forEach(m => tone(m[0], 1.5, "sine", 0.045, m[1], 0.08));
+}
+function startMusic() { stopMusic(); noteIdx = 0; playBar(); musicTimer = setInterval(playBar, 3200); }
+function stopMusic() { clearInterval(musicTimer); }
+const sfx = {
+  eat() { tone(660, 0.12, "sine", 0.2); tone(880, 0.15, "sine", 0.2, 0.08); },
+  gold() { [784, 988, 1175].forEach((f, i) => tone(f, 0.15, "sine", 0.2, i * 0.07)); },
+  bonus() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, "triangle", 0.2, i * 0.1)); },
+  over() { [392, 330, 262, 196].forEach((f, i) => tone(f, 0.3, "sawtooth", 0.12, i * 0.15)); }
+};
+
+/* ---------- Game logic ---------- */
+function reset() {
+  snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+  dir = { x: 1, y: 0 }; nextDir = dir;
+  proposed = false; proposalOpen = false; score = 0; hearts = 0; stepMs = 200; bonusUntil = 0; particles = [];
+  foods = [];
+  spawn(false);
+  updateHud();
+}
+
+function freeCell() {
+  for (let tries = 0; tries < 500; tries++) {
+    const p = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) };
+    if (!snake.some(s => s.x === p.x && s.y === p.y) && !foods.some(f => f.x === p.x && f.y === p.y)) return p;
+  }
+  return { x: 0, y: 0 };
+}
+function spawn(gold) { const p = freeCell(); p.gold = gold; foods.push(p); }
+
+function playerName() { return $("name").value.trim() || "My love"; }
+
+function showBanner(text, ms) {
+  const b = $("banner"); b.textContent = text; b.classList.add("show");
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.classList.remove("show"), ms);
+}
+
+function burst(cx, cy, color) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3;
+    particles.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+  }
+}
+
+function turn(d) {
+  const map = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+  const n = map[d]; if (!n) return;
+  if (n.x === -dir.x && n.y === -dir.y) return; // no instant reverse
+  nextDir = n;
+}
+
+function step() {
+  dir = nextDir;
+  const head = { x: (snake[0].x + dir.x + N) % N, y: (snake[0].y + dir.y + N) % N }; // walls wrap around
+  if (snake.slice(0, -1).some(s => s.x === head.x && s.y === head.y)) return gameOver();
+  snake.unshift(head);
+
+  const i = foods.findIndex(f => f.x === head.x && f.y === head.y);
+  if (i >= 0) {
+    const f = foods.splice(i, 1)[0];
+    burst(head.x * CELL + CELL / 2, head.y * CELL + CELL / 2, f.gold ? "#ffd75a" : "#ff4d88");
+    if (f.gold) { score += 3; sfx.gold(); }
+    else {
+      score += 1; hearts++; sfx.eat();
+      stepMs = Math.max(130, stepMs - 2);
+      if (hearts % 5 === 0) startBonus(); else spawn(false);
+      if (hearts === 15 && !proposed) propose();
+    }
+    updateHud();
+  } else snake.pop();
+
+  if (bonusUntil && performance.now() > bonusUntil) endBonus();
+}
+
+function startBonus() {
+  sfx.bonus();
+  bonusUntil = performance.now() + 9000;
+  foods = [];
+  for (let k = 0; k < 5; k++) spawn(true);
+  const msg = MESSAGES[(hearts / 5 - 1) % MESSAGES.length].replace("NAME", playerName());
+  showBanner("Bonus round, my love. " + msg, 5500);
+}
+function propose() {
+  proposed = true; proposalOpen = true;
+  $("propTitle").textContent = playerName() + ", will you marry me?";
+  $("proposal").classList.remove("hidden");
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.6, "sine", 0.18, i * 0.2, 0.05));
+}
+function sheSaidYes() {
+  proposalOpen = false; $("proposal").classList.add("hidden");
+  if (bonusUntil) bonusUntil = performance.now() + 9000;
+  lastStep = performance.now();
+  for (let i = 0; i < 12; i++) setTimeout(() => burst(Math.random() * canvas.width, Math.random() * canvas.height, i % 3 ? "#ff4d88" : "#ffd75a"), i * 150);
+  sfx.bonus(); setTimeout(sfx.bonus, 700);
+  showBanner("She said yes! Forever starts now, " + playerName() + ".", 7000);
+}
+function endBonus() { bonusUntil = 0; foods = []; spawn(false); }
+
+function gameOver() {
+  running = false; stopMusic(); sfx.over();
+  $("title").textContent = "Game over";
+  $("sub").textContent = "You collected " + hearts + " hearts and scored " + score + ".";
+  $("name").style.display = "";
+  $("start").textContent = "Play again";
+  $("overlay").classList.remove("hidden");
+}
+
+function updateHud() { $("score").textContent = score; $("hearts").textContent = hearts; }
+
+/* ---------- Drawing ---------- */
+function heart(cx, cy, s, color, c) {
+  c = c || ctx;
+  const ctx2 = c; c.save(); c.translate(cx, cy); c.fillStyle = color; c.beginPath();
+  c.moveTo(0, s * 0.8);
+  c.bezierCurveTo(-s * 1.3, -s * 0.1, -s * 0.6, -s * 1.0, 0, -s * 0.35);
+  c.bezierCurveTo(s * 0.6, -s * 1.0, s * 1.3, -s * 0.1, 0, s * 0.8);
+  c.fill(); c.restore();
+}
+
+function draw(ts) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const gr = ctx.createRadialGradient(200, 200, 40, 200, 200, 300); gr.addColorStop(0, "#3a0f27"); gr.addColorStop(1, "#1c0612");
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(255,255,255,.03)";
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if ((x + y) % 2 === 0) ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+
+  const pulse = 1 + Math.sin(ts / 150) * 0.12;
+  foods.forEach(f => heart(f.x * CELL + CELL / 2, f.y * CELL + CELL / 2, CELL * 0.4 * pulse, f.gold ? "#ffd75a" : "#ff2d6f"));
+
+  snake.forEach((s, i) => {
+    const t = 1 - i / (snake.length + 4);
+    ctx.fillStyle = bonusUntil ? "hsl(45," + (80 * t + 20) + "%," + (50 + 10 * t) + "%)" : "hsl(335," + (70 * t + 20) + "%," + (45 + 20 * t) + "%)";
+    ctx.beginPath(); ctx.roundRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2, 6); ctx.fill();
+  });
+  const h = snake[0];
+  ctx.fillStyle = "#fff";
+  const ex = dir.y !== 0 ? [5, 13] : [dir.x > 0 ? 12 : 6, dir.x > 0 ? 12 : 6];
+  const ey = dir.y !== 0 ? [dir.y > 0 ? 12 : 6, dir.y > 0 ? 12 : 6] : [5, 13];
+  for (let k = 0; k < 2; k++) { ctx.beginPath(); ctx.arc(h.x * CELL + ex[k], h.y * CELL + ey[k], 2.2, 0, 7); ctx.fill(); }
+
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+    ctx.globalAlpha = Math.max(p.life, 0); heart(p.x, p.y, 4, p.color); ctx.globalAlpha = 1;
+  });
+}
+
+const bg = $("bg"), bctx = bg.getContext("2d");
+function sizeBg() { bg.width = innerWidth; bg.height = innerHeight; }
+sizeBg(); addEventListener("resize", sizeBg);
+const floaters = Array.from({ length: 28 }, () => ({
+  x: Math.random(), y: Math.random(), s: 5 + Math.random() * 12, v: 0.0004 + Math.random() * 0.0008,
+  a: 0.08 + Math.random() * 0.25, ph: Math.random() * 6.28, c: Math.random() < 0.3 ? "#ffb36b" : "#ff4d88"
+}));
+function drawBg(ts) {
+  bctx.clearRect(0, 0, bg.width, bg.height);
+  floaters.forEach(f => {
+    f.y -= f.v; if (f.y < -0.05) { f.y = 1.05; f.x = Math.random(); }
+    bctx.globalAlpha = f.a;
+    heart(f.x * bg.width + Math.sin(ts / 1500 + f.ph) * 18, f.y * bg.height, f.s, f.c, bctx);
+  });
+  bctx.globalAlpha = 1;
+}
+
+function loop(ts) {
+  if (running && !paused && !proposalOpen && ts - lastStep >= stepMs) { lastStep = ts; step(); }
+  draw(ts); drawBg(ts); requestAnimationFrame(loop);
+}
+
+/* ---------- Controls ---------- */
+function start() {
+  ac(); reset(); running = true; paused = false;
+  lastStep = performance.now();
+  $("overlay").classList.add("hidden");
+  startMusic();
+}
+
+function togglePause() {
+  if (!running || proposalOpen) return;
+  paused = !paused;
+  if (paused) {
+    $("title").textContent = "Paused"; $("sub").textContent = "Take a breath.";
+    $("name").style.display = "none"; $("start").textContent = "Resume";
+    $("overlay").classList.remove("hidden");
+  } else {
+    $("overlay").classList.add("hidden"); lastStep = performance.now();
+  }
+}
+
+$("start").addEventListener("click", () => { if (paused) togglePause(); else { $("name").style.display = ""; start(); } });
+$("name").addEventListener("keydown", e => { if (e.key === "Enter") start(); });
+$("yes1").addEventListener("click", sheSaidYes);
+$("yes2").addEventListener("click", sheSaidYes);
+$("mute").addEventListener("click", e => { muted = !muted; e.target.textContent = muted ? "Sound off" : "Sound on"; });
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  const map = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", w: "up", s: "down", a: "left", d: "right" };
+  if (map[e.key]) { e.preventDefault(); turn(map[e.key]); }
+  else if (e.key === " ") { e.preventDefault(); togglePause(); }
+});
+document.querySelectorAll("[data-dir]").forEach(b => b.addEventListener("click", () => turn(b.dataset.dir)));
+
+let sx, sy;
+canvas.addEventListener("touchstart", e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+canvas.addEventListener("touchend", e => {
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+  turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+}, { passive: true });
+
+reset(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
